@@ -1,0 +1,100 @@
+name: Bob PR Review
+
+"on":
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: bob-pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        BOB_REVIEW_MAX_FILES: "25"
+        BOB_REVIEW_MAX_INLINE_COMMENTS: "10"
+        BOB_REVIEW_MAX_PATCH_CHARS: "120000"
+        BOB_REVIEW_MAX_FILE_CHARS: "12000"
+        BOB_REVIEW_CONTEXT_FILE_LIMIT: "8"
+        BOBSHELL_INSTANCE_ID: ${{ vars.BOBSHELL_INSTANCE_ID }}
+        BOBSHELL_TEAM_ID: ${{ vars.BOBSHELL_TEAM_ID }}
+
+    steps:
+      - name: Check out PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build Bob review context
+        run: node scripts/build-review-context.mjs
+
+      - name: Install Bob Shell
+        env:
+          CI: "true"
+        run: curl -fsSL https://bob.ibm.com/download/bobshell.sh | bash -s -- --pm npm
+
+      - name: Run Bob review
+        id: bob_review
+        env:
+          BOBSHELL_API_KEY: ${{ secrets.BOBSHELL_API_KEY }}
+        run: |
+          set +e
+          mkdir -p artifacts
+          bob_args=(
+            --accept-license
+            --auth-method api-key
+            --chat-mode ask
+            --hide-intermediary-output
+            -p "Review @artifacts/review-context.md for this pull request. Inspect changed files in the workspace only if needed. Return ONLY valid JSON wrapped exactly in <bob-review> and </bob-review> tags with this schema: {\"summary\":\"string\",\"overall\":\"no_issues|issues_found|needs_human_review\",\"findings\":[{\"path\":\"string\",\"line\":123,\"severity\":\"low|medium|high\",\"title\":\"string\",\"body\":\"markdown string\"}]}. Rules: Focus on bugs, security, risky logic, and maintainability issues. Ignore style nits. Only report issues that are evidenced by the current diff. Only use line numbers from the PR head side. Keep findings concise and actionable. Return an empty findings array when there are no actionable issues."
+          )
+          if [ -n "${BOBSHELL_INSTANCE_ID}" ]; then
+            bob_args+=(--instance-id "${BOBSHELL_INSTANCE_ID}")
+          fi
+          if [ -n "${BOBSHELL_TEAM_ID}" ]; then
+            bob_args+=(--team-id "${BOBSHELL_TEAM_ID}")
+          fi
+          bob "${bob_args[@]}" > artifacts/bob-review-output.txt 2> artifacts/bob-review-error.txt
+          status=$?
+          echo "exit_code=${status}" >> "${GITHUB_OUTPUT}"
+          exit 0
+
+      - name: Debug Bob output
+        if: always()
+        run: |
+          echo "=== STDOUT ==="
+          cat artifacts/bob-review-output.txt || true
+          echo
+          echo "=== STDERR ==="
+          cat artifacts/bob-review-error.txt || true
+
+      - name: Publish Bob review
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BOB_EXIT_CODE: ${{ steps.bob_review.outputs.exit_code || '1' }}
+        run: node scripts/publish-bob-review.mjs
+
+      - name: Fail on Bob execution error
+        if: always() && steps.bob_review.outputs.exit_code != '0'
+        run: |
+          echo "Bob review failed with exit code ${{ steps.bob_review.outputs.exit_code }}"
+          exit 1
+
+# Made with Bob

@@ -1,0 +1,147 @@
+name: 🏷️ Bob Issue Triage
+
+on:
+  issues:
+    types: [opened, reopened]
+
+jobs:
+  triage:
+    name: Auto-triage new issues
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+      contents: read
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Bob Shell
+        run: curl -fsSL https://bob.ibm.com/download/bobshell.sh | bash -s -- --pm npm
+
+      - name: Get issue details
+        id: issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue view ${{ github.event.issue.number }} --json title,body,author > issue.json
+          echo "Issue saved to issue.json"
+
+      - name: Run Bob Shell triage
+        env:
+          BOBSHELL_API_KEY: ${{ secrets.BOBSHELL_API_KEY }}
+        run: |
+          bob --accept-license --auth-method api-key -p "$(cat <<'EOF'
+          You are an intelligent issue triage bot running in GitHub Actions.
+          
+          Read the issue details from issue.json using the read_file tool.
+          
+          Analyze the issue and provide a triage response with these markers:
+          
+          <<<BOB_TRIAGE_BEGIN>>>
+          {
+            "labels": ["label1", "label2"],
+            "priority": "high|medium|low",
+            "category": "bug|feature|documentation|question|enhancement",
+            "comment": "Your helpful triage comment here"
+          }
+          <<<BOB_TRIAGE_END>>>
+          
+          Guidelines:
+          - Suggest 2-4 relevant labels based on content (e.g., "bug", "enhancement", "documentation", "needs-investigation", "good-first-issue")
+          - Assign priority: high (security/critical bugs), medium (features/improvements), low (minor issues/questions)
+          - Categorize the issue type
+          - Write a helpful comment that:
+            * Thanks the user for reporting
+            * Summarizes what you understood
+            * Suggests next steps or asks clarifying questions if needed
+            * Mentions related issues if any exist
+          
+          Be professional, helpful, and concise. Do not modify any files.
+          EOF
+          )" 2>&1 | tee bob_triage_output.txt
+
+      - name: Extract triage data
+        id: triage
+        run: |
+          # Extract JSON between markers
+          awk '/^<<<BOB_TRIAGE_BEGIN>>>$/{flag=1; next} /^<<<BOB_TRIAGE_END>>>$/{flag=0} flag' bob_triage_output.txt > triage.json
+          
+          if [ ! -s triage.json ]; then
+            echo "ERROR: triage markers not found in Bob's output"
+            echo "--- Bob output ---"
+            cat bob_triage_output.txt
+            exit 1
+          fi
+          
+          # Parse JSON and set outputs
+          LABELS=$(jq -r '.labels | join(",")' triage.json)
+          PRIORITY=$(jq -r '.priority' triage.json)
+          CATEGORY=$(jq -r '.category' triage.json)
+          COMMENT=$(jq -r '.comment' triage.json)
+          
+          echo "labels=$LABELS" >> $GITHUB_OUTPUT
+          echo "priority=$PRIORITY" >> $GITHUB_OUTPUT
+          echo "category=$CATEGORY" >> $GITHUB_OUTPUT
+          echo "comment<<EOF" >> $GITHUB_OUTPUT
+          echo "$COMMENT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+          echo "--- Triage Results ---"
+          echo "Labels: $LABELS"
+          echo "Priority: $PRIORITY"
+          echo "Category: $CATEGORY"
+
+      - name: Apply labels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LABELS="${{ steps.triage.outputs.labels }}"
+          PRIORITY="${{ steps.triage.outputs.priority }}"
+          CATEGORY="${{ steps.triage.outputs.category }}"
+          
+          # Create labels if they don't exist (convert comma-separated to array)
+          IFS=',' read -ra LABEL_ARRAY <<< "$LABELS"
+          for label in "$CATEGORY" "priority:$PRIORITY" "${LABEL_ARRAY[@]}"; do
+            gh label create "$label" --force 2>/dev/null || true
+          done
+          
+          # Add category and priority as labels
+          ALL_LABELS="$CATEGORY,priority:$PRIORITY,$LABELS"
+          
+          # Apply labels (comma-separated)
+          gh issue edit ${{ github.event.issue.number }} --add-label "$ALL_LABELS" || echo "Some labels may not exist, but continuing..."
+
+      - name: Post triage comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "## 🤖 Automated Triage"
+            echo ""
+            echo "*This issue has been automatically triaged by [Bob Shell](https://bob.ibm.com).*"
+            echo ""
+            echo "**Priority:** \`${{ steps.triage.outputs.priority }}\`"
+            echo "**Category:** \`${{ steps.triage.outputs.category }}\`"
+            echo "**Labels:** \`${{ steps.triage.outputs.labels }}\`"
+            echo ""
+            echo "---"
+            echo ""
+            echo "${{ steps.triage.outputs.comment }}"
+            echo ""
+            echo "---"
+            echo ""
+            echo "*If this triage is incorrect, please update the labels manually or mention a maintainer.*"
+          } > triage_comment.md
+          echo "--- Final triage comment ---"
+          cat triage_comment.md
+          
+          gh issue comment ${{ github.event.issue.number }} --body-file triage_comment.md
+
+# Made with Bob
