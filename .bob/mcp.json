@@ -1,0 +1,97 @@
+{
+  "mcpServers": {
+    "mcp-atlassian": {
+      "command": "uvx",
+      "args": [
+        "mcp-atlassian"
+      ],
+      "env": {
+        "JIRA_URL": "https://adityakrishnan28.atlassian.net",
+        "JIRA_USERNAME": "aditya.krishnan28@gmail.com",
+        "JIRA_API_TOKEN": "ATATT3xFfGF0iqP_5Z5HAZA4SJOtja37uoPh3IOq2LxKW4-buujP2Vj82TJRGt8zAqWGnGlSrUwB02CzBS51lRX2H0QKU1CvPt3gU5Hgk3Mvz0SSJ9WtYwXhxOkTT7wq6pGGJ47y4UFguQazlhhmrirLOWr0mTxYKEWTPHSSKWACHGOoJIqpvuE=110F5DEE",
+        "CONFLUENCE_URL": "https://adityakrishnan28.atlassian.net/wiki",
+        "CONFLUENCE_USERNAME": "aditya.krishnan28@gmail.com",
+        "CONFLUENCE_API_TOKEN": "ATATT3xFfGF0iqP_5Z5HAZA4SJOtja37uoPh3IOq2LxKW4-buujP2Vj82TJRGt8zAqWGnGlSrUwB02CzBS51lRX2H0QKU1CvPt3gU5Hgk3Mvz0SSJ9WtYwXhxOkTT7wq6pGGJ47y4UFguQazlhhmrirLOWr0mTxYKEWTPHSSKWACHGOoJIqpvuE=110F5DEE",
+        "TOOLSETS": "all"
+      },
+      "alwaysAllow": [],
+      "disabled": false
+    },
+    "tavily-remote-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://mcp.tavily.com/mcp/?tavilyApiKey=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"
+      ],
+      "env": {},
+      "alwaysAllow": [],
+      "disabled": false
+    },
+    "monday-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://mcp.monday.com/mcp",
+        "--header",
+        "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJ0aWQiOjY0MTgxNjE5NCwiYWFpIjoxMSwidWlkIjoxMDE4MjAzNTEsImlhZCI6IjIwMjYtMDQtMDZUMDc6MzA6NDQuNzgzWiIsInBlciI6Im1lOndyaXRlIiwiYWN0aWQiOjM0NTQyOTYxLCJyZ24iOiJhcHNlMiJ9.1UUxuEuNQdCgtABPnH1RKTgbEAyjA_ZwSUsd3mJArrA"
+      ],
+      "env": {},
+      "alwaysAllow": [],
+      "disabled": false
+    },
+    "github": {
+      "command": "podman",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "-e",
+        "GITHUB_TOOLSETS",
+        "-e",
+        "GITHUB_READ_ONLY",
+        "ghcr.io/github/github-mcp-server",
+        "stdio"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "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",
+        "GITHUB_TOOLSETS": "",
+        "GITHUB_READ_ONLY": ""
+      }
+    },
+    "watsonx-orchestrate-adk-docs": {
+      "type": "streamable-http",
+      "url": "https://developer.watson-orchestrate.ibm.com/mcp"
+    },
+    "canva-dev": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@canva/cli@latest",
+        "mcp"
+      ],
+      "env": {},
+      "alwaysAllow": [],
+      "disabled": false
+    },
+    "Framelink_Figma_MCP": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "figma-developer-mcp",
+        "--figma-api-key=figd_oAq9yCPkMjnSCWaXqmq3bXmrWk3IaaOxjMTrkJaG",
+        "--stdio"
+      ],
+      "env": {},
+      "alwaysAllow": [],
+      "disabled": false
+    },
+    "figma-mcp": {
+      "type": "streamable-http",
+      "url": "http://127.0.0.1:3845/mcp"
+    }
+  }
+}
